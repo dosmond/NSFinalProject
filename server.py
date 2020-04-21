@@ -114,8 +114,26 @@ class Server:
         ).decryptor()
 
         msg = decryptor.update(msg) + decryptor.finalize()
-
         unpadder = bpad.PKCS7(256).unpadder()
-        msg = unpadder.update(msg) + unpadder.finalize()
 
+        return unpadder.update(msg) + unpadder.finalize()
+
+    def parse_amod_p_and_p(self, amodp_and_p):
+        amodp = int(amodp_and_p[:1].decode())
+        p = int(amodp_and_p[1:].decode())
+
+        return amodp, p
+
+    def gen_hash(self, msg):
+        digest = hashes.Hash(hashes.SHA256(), backend=default_backend())
+        digest.update(msg.encode())
+        return digest.finalize()
+
+    def send_first_hash(self, conn, hash):
+        encrypted_msg = self.encrypt(hash, self.shared_key, self.iv)
+        conn.sendall(encrypted_msg)
+
+    def receive_second_hash(self, conn):
+        res = conn.recv(4096)
+        msg = self.decrypt(res, self.shared_key, self.iv)
         return msg

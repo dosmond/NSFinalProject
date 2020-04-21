@@ -15,11 +15,11 @@ class Client:
     # password: client password for server
     # wmodp: 2^W mod p
     # c_id: Client id
-    def __init__(self, ip, port, amodp, wmodp, p, c_id, iv):
+    def __init__(self, ip, port, a, w, p, c_id, iv):
         self.ip = ip
         self.port = port
-        self.wmodp = wmodp
-        self.amodp = amodp
+        self.w = w
+        self.a = a
         self.p = p
         self.id = c_id
         self.iv = iv
@@ -81,12 +81,13 @@ class Client:
         self.shared_key = digest.finalize()
 
     def send_amodp_and_p(self, sock):
-        encrypted_msg = self.encrypt(self.amodp.encode() + self.p.encode(), self.shared_key, self.iv)
+        amodp = str((2**int(self.a)) % int(self.p))
+        encrypted_msg = self.encrypt(amodp.encode() + self.p.encode(), self.shared_key, self.iv)
         sock.sendall(encrypted_msg)
 
     def receive_bmodp(self, sock):
         res = sock.recv(4096)
-        msg = self.decrypt(res, self.shared_key, self.iv)
+        msg = int(self.decrypt(res, self.shared_key, self.iv).decode())
         return msg
 
     # CBC-AES Encrypt
@@ -112,6 +113,19 @@ class Client:
 
         msg = decryptor.update(msg) + decryptor.finalize()
         unpadder = bpad.PKCS7(256).unpadder()
-        msg = unpadder.update(msg) + unpadder.finalize()
 
+        return unpadder.update(msg) + unpadder.finalize()
+
+    def gen_hash(self, msg):
+        digest = hashes.Hash(hashes.SHA256(), backend=default_backend())
+        digest.update(msg.encode())
+        return digest.finalize()
+
+    def send_second_hash(self, sock, hash):
+        encrypted_msg = self.encrypt(hash, self.shared_key, self.iv)
+        sock.sendall(encrypted_msg)
+
+    def receive_first_hash(self, sock):
+        res = sock.recv(4096)
+        msg = self.decrypt(res, self.shared_key, self.iv)
         return msg

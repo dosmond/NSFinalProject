@@ -5,7 +5,7 @@ from pdm import PDMServer
 def main():
     ip = "localhost"
     port = 65432
-    wmodp = '15'
+    wmodp = str((2**15) % 17)
     client_id = 'ALICE'
     iv = b'0000000000000000'
 
