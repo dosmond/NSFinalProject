@@ -1,4 +1,3 @@
-from client import Client
 from server import Server
 from pdm import PDMServer
 
@@ -8,8 +7,9 @@ def main():
     port = 65432
     wmodp = '15'
     client_id = 'ALICE'
+    iv = b'0000000000000000'
 
-    server = Server(ip, port, wmodp, client_id)
+    server = Server(ip, port, wmodp, client_id, iv)
 
     pdms = PDMServer(server)
 

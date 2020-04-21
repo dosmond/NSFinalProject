@@ -9,8 +9,9 @@ def main():
     client_id = 'ALICE'
     amodp = '16'
     p = '5'
+    iv = b'0000000000000000'
 
-    client = Client(ip, port, amodp, wmodp, p, client_id)
+    client = Client(ip, port, amodp, wmodp, p, client_id, iv)
 
     pdmc = PDMClient(client)
 

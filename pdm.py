@@ -27,18 +27,14 @@ class PDMServer:
         print("            |                                       |")
 
         d1, s_dh_pub = self.server.begin_diffie_hellman()
-        print(len(str(s_dh_pub)))
 
         # TODO Fix not being able to send full dh_pub_key
         self.server.send_dh_pub_key(conn, self.server.client_rsa_pub_key, str(s_dh_pub).encode())
 
         server_received_server_dh_pub = self.server.receive_client_dh_pub_key(conn)
+        server_received_server_dh_pub = int(server_received_server_dh_pub.decode())
 
-        self.server.set_shared_key(d1.gen_shared_key(server_received_server_dh_pub))
-
-        if self.server.shared_key != self.client.shared_key:
-            print("Diffie Hellman failed! Shared Keys are not equal")
-            exit(0)
+        self.server.set_shared_key(str(d1.gen_shared_key(server_received_server_dh_pub)).encode())
 
         print("            |           K[ 2^a mod p, p]            |")
         print("            |______________________________________>|")
@@ -46,16 +42,12 @@ class PDMServer:
 
         amodp_and_p = self.server.receive_amodp_and_p(conn)
 
-        if amodp_and_p != self.client.amodp + self.client.p:
-            print("First message sent incorrectly! Try again")
-            exit(0)
-
         print("            |             K[ 2^b mod p]             |")
         print("            |<______________________________________|")
         print("            |                                       |")
 
         # TODO Generate 2^b mod p
-        bmodp = '10'
+        bmodp = b'10'
 
         self.server.send_bmodp(conn, bmodp)
 
@@ -86,13 +78,10 @@ class PDMClient:
 
         client_received_server_dh_pub = self.client.receive_server_dh_pub(sock)
 
-        self.client.send_dh_pub_key(sock, self.client.server_rsa_pub_key, c_dh_pub)
+        client_received_server_dh_pub = int(client_received_server_dh_pub.decode())
+        self.client.send_dh_pub_key(sock, self.client.server_rsa_pub_key, str(c_dh_pub).encode())
 
-        self.client.set_shared_key(d2.gen_shared_key(client_received_server_dh_pub))
-
-        if self.server.shared_key != self.client.shared_key:
-            print("Diffie Hellman failed! Shared Keys are not equal")
-            exit(0)
+        self.client.set_shared_key(str(d2.gen_shared_key(client_received_server_dh_pub)).encode())
 
         self.client.send_amodp_and_p(sock)
 

@@ -3,8 +3,10 @@ import pyDH as d
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives.asymmetric import padding
+from cryptography.hazmat.primitives import padding as bpad
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives import hashes
 
 
 class Client:
@@ -13,13 +15,14 @@ class Client:
     # password: client password for server
     # wmodp: 2^W mod p
     # c_id: Client id
-    def __init__(self, ip, port, amodp, wmodp, p, c_id):
+    def __init__(self, ip, port, amodp, wmodp, p, c_id, iv):
         self.ip = ip
         self.port = port
         self.wmodp = wmodp
         self.amodp = amodp
         self.p = p
         self.id = c_id
+        self.iv = iv
 
         key = rsa.generate_private_key(
             public_exponent=65537,
@@ -50,7 +53,7 @@ class Client:
         self.server_rsa_pub_key = key
 
     def begin_diffie_hellman(self):
-        dh = d.DiffieHellman()
+        dh = d.DiffieHellman(group=5)
         public_key = dh.gen_public_key()
         return dh, public_key
 
@@ -61,7 +64,7 @@ class Client:
         return pub_key.encrypt(msg, padding.PKCS1v15())
 
     def decrypt_using_private_key(self, ciphertext):
-        return self.rsa_private_key.decrypt(ciphertext, padding.PKCS1v15)
+        return self.rsa_private_key.decrypt(ciphertext, padding.PKCS1v15())
 
     def receive_server_dh_pub(self, sock):
         res = sock.recv(4096)
@@ -72,15 +75,18 @@ class Client:
         conn.sendall(encrypted_key)
 
     def set_shared_key(self, key):
-        self.shared_key = key
+        digest = hashes.Hash(hashes.SHA256(), backend=default_backend())
+        digest.update(key)
+
+        self.shared_key = digest.finalize()
 
     def send_amodp_and_p(self, sock):
-        encrypted_msg = self.encrypt(self.amodp + self.p, self.shared_key, b'00000000')
+        encrypted_msg = self.encrypt(self.amodp.encode() + self.p.encode(), self.shared_key, self.iv)
         sock.sendall(encrypted_msg)
 
     def receive_bmodp(self, sock):
         res = sock.recv(4096)
-        msg = self.decrypt(res, self.shared_key, b'00000000')
+        msg = self.decrypt(res, self.shared_key, self.iv)
         return msg
 
     # CBC-AES Encrypt
@@ -90,6 +96,9 @@ class Client:
             modes.CBC(iv),
             backend=default_backend()
         ).encryptor()
+
+        padder = bpad.PKCS7(256).padder()
+        msg = padder.update(msg) + padder.finalize()
 
         return encryptor.update(msg) + encryptor.finalize()
 
@@ -101,6 +110,8 @@ class Client:
             backend=default_backend()
         ).decryptor()
 
-        # Decryption gets us the authenticated plaintext.
-        # If the tag does not match an InvalidTag exception will be raised.
-        return decryptor.update(msg) + decryptor.finalize()
+        msg = decryptor.update(msg) + decryptor.finalize()
+        unpadder = bpad.PKCS7(256).unpadder()
+        msg = unpadder.update(msg) + unpadder.finalize()
+
+        return msg
