@@ -85,10 +85,18 @@ class Client:
         encrypted_msg = self.encrypt(amodp.encode() + self.p.encode(), self.shared_key, self.iv)
         sock.sendall(encrypted_msg)
 
+    def send_amodp(self, sock):
+        amodp = str((2 ** int(self.a)) % int(self.p)).encode()
+        sock.sendall(amodp)
+
     def receive_bmodp(self, sock):
         res = sock.recv(4096)
         msg = int(self.decrypt(res, self.shared_key, self.iv).decode())
         return msg
+
+    def receive_bmodp_norm(self, sock):
+        res = sock.recv(4096)
+        return int(res.decode())
 
     # CBC-AES Encrypt
     def encrypt(self, msg, key, iv):
@@ -118,14 +126,21 @@ class Client:
 
     def gen_hash(self, msg):
         digest = hashes.Hash(hashes.SHA256(), backend=default_backend())
-        digest.update(msg.encode())
+        digest.update(msg)
         return digest.finalize()
 
     def send_second_hash(self, sock, hash):
         encrypted_msg = self.encrypt(hash, self.shared_key, self.iv)
         sock.sendall(encrypted_msg)
 
+    def send_second_hash_norm(self, sock, hash):
+        sock.sendall(hash)
+
     def receive_first_hash(self, sock):
         res = sock.recv(4096)
         msg = self.decrypt(res, self.shared_key, self.iv)
         return msg
+
+    def receive_first_hash_norm(self, sock):
+        res = sock.recv(4096)
+        return res

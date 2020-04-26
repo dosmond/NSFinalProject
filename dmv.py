@@ -2,7 +2,7 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.backends import default_backend
 
 
-class PDMServer:
+class DMVServer:
     def __init__(self, server, debug):
         self.server = server
         self.DEBUG = debug
@@ -21,7 +21,7 @@ class PDMServer:
         key = serialization.load_pem_public_key(key.encode(), backend=default_backend())
         self.server.set_client_pub_key(key)
 
-        self.dprint("            -------- Beginning Augmented PDM ----------")
+        self.dprint("-------- Beginning Augmented PDM with Server Break-in Protection ----------")
         self.dprint("            |                                       |")
         self.dprint("            |      RSA-Diffie Hellman Exchange      |")
         self.dprint("            |<_____________________________________>|")
@@ -36,37 +36,38 @@ class PDMServer:
 
         self.server.set_shared_key(str(d1.gen_shared_key(server_received_server_dh_pub)).encode())
 
-        self.dprint("            |              2^a mod p                |")
+        self.dprint("            |           K[ 2^a mod p, p]            |")
         self.dprint("            |______________________________________>|")
         self.dprint("            |                                       |")
 
-        amodp = self.server.receive_amodp_norm(conn)
+        amodp_and_p = self.server.receive_amodp_and_p(conn)
 
-        self.dprint("            |                2^b mod p              |")
+        amodp, p = self.server.parse_amod_p_and_p(amodp_and_p)
+
+        self.dprint("            |             K[ 2^b mod p]             |")
         self.dprint("            |<______________________________________|")
         self.dprint("            |                                       |")
 
         # TODO Generate 2^b mod p
         b = 10
-        bmodp = str((2**b) % int(self.server.p)).encode()
+        bmodp = str((2**b) % p).encode()
 
-        abmodp = str((amodp**b) % int(self.server.p))
-        wbmodp = str((int(self.server.wmodp)**b) % int(self.server.p))
+        abmodp = str((amodp**b) % p)
+        wbmodp = str((int(self.server.wmodp)**b) % p)
 
-        self.server.send_bmodp_norm(conn, bmodp)
+        self.server.send_bmodp(conn, bmodp)
 
         first_hash = self.server.gen_hash((abmodp + wbmodp).encode())
-        second_hash = self.server.gen_hash(first_hash)
+        second_hash = self.server.gen_hash((wbmodp + abmodp).encode())
 
-        self.dprint("            |       hash(2^ab mod p, 2^Wb mod p)    |")
+        self.dprint("            |      K[hash(2^ab mod p, 2^Wb mod p)]  |")
         self.dprint("            |<______________________________________|")
         self.dprint("            |                                       |")
-        self.server.send_first_hash_norm(conn, first_hash)
-        self.dprint("            |       hash'(2^ab mod p, 2^Wb mod p)   |")
+        self.server.send_first_hash(conn, first_hash)
+        self.dprint("            |     K[hash(2^bW mod p, 2^ab mod p)]   |")
         self.dprint("            |______________________________________>|")
         self.dprint("            |                                       |")
-        r_second_hash = self.server.receive_second_hash_norm(conn)
-
+        r_second_hash = self.server.receive_second_hash(conn)
 
         if r_second_hash != second_hash:
             print("Client not validated! Closing Connection!")
@@ -79,7 +80,7 @@ class PDMServer:
             print(msg)
 
 
-class PDMClient:
+class DMVClient:
     def __init__(self, client):
         self.client = client
 
@@ -103,26 +104,26 @@ class PDMClient:
         # Generate the shared key and set the client instance variable
         self.client.set_shared_key(str(d2.gen_shared_key(client_received_server_dh_pub)).encode())
 
-        # Send 2^a mod p
-        self.client.send_amodp(sock)
+        # Send K[ 2^a mod p, p ]
+        self.client.send_amodp_and_p(sock)
 
-        # Receive 2^b mod p
-        bmodp = self.client.receive_bmodp_norm(sock)
+        # Receive K[ 2^b mod p ]
+        bmodp = self.client.receive_bmodp(sock)
 
         abmodp = str((bmodp**int(self.client.a)) % int(self.client.p))
         wbmodp = str((bmodp**int(self.client.w)) % int(self.client.p))
 
         first_hash = self.client.gen_hash((abmodp + wbmodp).encode())
-        second_hash = self.client.gen_hash(first_hash)
+        second_hash = self.client.gen_hash((wbmodp + abmodp).encode())
 
         # Receive hash( 2^ab mod p, 2^Wb mod p)
-        r_first_hash = self.client.receive_first_hash_norm(sock)
+        r_first_hash = self.client.receive_first_hash(sock)
 
         if r_first_hash != first_hash:
             print("Server was not authenticated! Closing connection!")
             exit(0)
 
         # Send hash'(2^bW mod p, 2^ab mod p)
-        self.client.send_second_hash_norm(sock, second_hash)
+        self.client.send_second_hash(sock, second_hash)
 
 

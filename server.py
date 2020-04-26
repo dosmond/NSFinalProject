@@ -16,12 +16,15 @@ class Server:
         wmodp: 2^W mod p
         client_id: Client's identifier
     '''
-    def __init__(self, ip, port, wmodp, client_id, iv):
+    def __init__(self, ip, port, wmodp, client_id, iv, p):
         self.ip = ip
         self.port = port
         self.wmodp = wmodp
         self.client_id = client_id
         self.iv = iv
+
+        # Only used in the PDM Server
+        self.p = p
 
         key = rsa.generate_private_key(
             public_exponent=65537,
@@ -88,9 +91,16 @@ class Server:
         msg = self.decrypt(res, self.shared_key, self.iv)
         return msg
 
+    def receive_amodp_norm(self, conn):
+        res = conn.recv(4096)
+        return int(res.decode())
+
     def send_bmodp(self, conn, bmodp):
         encrypted_msg = self.encrypt(bmodp, self.shared_key, self.iv)
         conn.sendall(encrypted_msg)
+
+    def send_bmodp_norm(self, conn, bmodp):
+        conn.sendall(bmodp)
 
     # CBC-AES Encrypt
     def encrypt(self, msg, key, iv):
@@ -126,7 +136,7 @@ class Server:
 
     def gen_hash(self, msg):
         digest = hashes.Hash(hashes.SHA256(), backend=default_backend())
-        digest.update(msg.encode())
+        digest.update(msg)
         return digest.finalize()
 
     def send_first_hash(self, conn, hash):
@@ -137,3 +147,10 @@ class Server:
         res = conn.recv(4096)
         msg = self.decrypt(res, self.shared_key, self.iv)
         return msg
+
+    def send_first_hash_norm(self, conn, hash):
+        conn.sendall(hash)
+
+    def receive_second_hash_norm(self, conn):
+        res = conn.recv(4096)
+        return res

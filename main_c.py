@@ -1,4 +1,5 @@
 from client import Client
+from dmv import DMVClient
 from pdm import PDMClient
 
 
@@ -11,11 +12,20 @@ def main():
     p = '17'
     iv = b'0000000000000000'
 
+    num_iter = 100
+
     client = Client(ip, port, a, w, p, client_id, iv)
+
+    dmvc = DMVClient(client)
+
+    for i in range(0, num_iter):
+        dmvc.run()
+
 
     pdmc = PDMClient(client)
 
-    pdmc.run()
+    for i in range(0, num_iter):
+        pdmc.run()
 
 
 if __name__ == '__main__':
